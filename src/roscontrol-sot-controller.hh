@@ -115,6 +115,9 @@ namespace sot_controller
     /// \brief Interface to the joints controlled in position.
     lhi::PositionJointInterface * pos_iface_;
 
+    /// \brief Interface to the joints controlled in velocity.
+    lhi::VelocityJointInterface * vel_iface_;
+
     /// \brief Interface to the joints controlled in force.
     lhi::EffortJointInterface * effort_iface_;
     

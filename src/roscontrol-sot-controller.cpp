@@ -172,6 +172,16 @@ namespace sot_controller
 	return false ;
       }
 
+    // Get a pointer to the joint velocity control interface
+    vel_iface_ = robot_hw->get<VelocityJointInterface>();
+    if (! vel_iface_)
+      {
+	ROS_ERROR("This controller requires a hardware interface of type '%s'."
+		  " Make sure this is registered in the %s::RobotHW class.",
+		  getHardwareInterfaceType().c_str(), lns.c_str());
+	return false ;
+      }
+
     // Get a pointer to the joint effort control interface
     effort_iface_ = robot_hw->get<EffortJointInterface>();
     if (! effort_iface_)
@@ -218,6 +228,7 @@ namespace sot_controller
       
     // Return which resources are claimed by this controller
     pos_iface_->clearClaims();
+    vel_iface_->clearClaims();
     effort_iface_->clearClaims();
     
     if (! init ())
@@ -237,6 +248,13 @@ namespace sot_controller
     displayClaimedResources(claimed_resources);
     pos_iface_->clearClaims();
 
+    iface_res.hardware_interface = hardware_interface::internal::demangledTypeName<VelocityJointInterface>();
+    iface_res.resources = vel_iface_->getClaims();
+    claimed_resources.push_back(iface_res);
+    
+    displayClaimedResources(claimed_resources);
+    vel_iface_->clearClaims();
+
     iface_res.hardware_interface = hardware_interface::internal::demangledTypeName<EffortJointInterface>();
     iface_res.resources = effort_iface_->getClaims();
     claimed_resources.push_back(iface_res);
@@ -247,6 +265,10 @@ namespace sot_controller
     claimed_resources = pos_iface_->getClaims();
     displayClaimedResources(claimed_resources);
     pos_iface_->clearClaims();
+
+    claimed_resources = vel_iface_->getClaims();
+    displayClaimedResources(claimed_resources);
+    vel_iface_->clearClaims();
 
     claimed_resources = effort_iface_->getClaims();
     displayClaimedResources(claimed_resources);
