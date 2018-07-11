@@ -21,6 +21,7 @@ void DataToLog::init(unsigned int nbDofs,long int length)
 {
   motor_angle.resize(nbDofs*length);
   joint_angle.resize(nbDofs*length);
+  odometry.resize(3 * length);
   velocities.resize(nbDofs*length);
   torques.resize(nbDofs*length);
   motor_currents.resize(nbDofs*length);
@@ -79,6 +80,8 @@ void Log::record(DataToLog &aDataToLog)
 	StoredData_.motor_currents[JointID+lref_]= aDataToLog.motor_currents[JointID];
       if (aDataToLog.temperatures.size()>JointID)
 	StoredData_.temperatures[JointID+lref_]= aDataToLog.temperatures[JointID];
+      if (aDataToLog.odometry.size()>JointID)
+	StoredData_.odometry[JointID+lref_]= aDataToLog.odometry[JointID];
     }
   for(unsigned int axis=0;axis<3;axis++)
     {
@@ -150,6 +153,9 @@ void Log::save(std::string &fileName)
   oss << "-forceSensors.log";
   suffix = oss.str();
   saveVector(fileName,suffix,StoredData_.force_sensors, 6);
+
+  suffix = "-odometry.log";
+  saveVector(fileName,suffix,StoredData_.temperatures, nbDofs_);
 
   suffix = "-temperatures.log";
   saveVector(fileName,suffix,StoredData_.temperatures, nbDofs_);

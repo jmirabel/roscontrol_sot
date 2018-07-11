@@ -18,6 +18,8 @@ namespace rc_sot_system {
     std::vector<double> motor_angle;
     // Measured angle at the joint side.
     std::vector<double> joint_angle;
+    // Measured position of the base
+    std::vector<double> odometry;
     // Measured or computed velocities.
     std::vector<double> velocities;
     // Measured torques.
