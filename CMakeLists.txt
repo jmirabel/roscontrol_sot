@@ -43,6 +43,7 @@ find_package(catkin REQUIRED COMPONENTS
   realtime_tools
   controller_interface
   pal_hardware_interfaces
+  diff_drive_controller
 )
 
 ## LAAS cmake submodule part

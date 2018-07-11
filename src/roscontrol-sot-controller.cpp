@@ -63,6 +63,7 @@ namespace sot_controller
   RCSotController():
     // Store 32 DoFs for 5 minutes (1 Khz: 5*60*1000)
     // -> 124 Mo of data.
+    nonholonomic_base_controller_ (NULL),
     type_name_("RCSotController"),
     simulation_mode_(false),
     control_mode_(POSITION),
@@ -70,6 +71,11 @@ namespace sot_controller
     jitter_(0.0)
   {
     RESETDEBUG4();
+  }
+
+  RCSotController::~RCSotController ()
+  {
+    if (nonholonomic_base_controller_) delete nonholonomic_base_controller_;
   }
   
   void RCSotController::
@@ -149,8 +155,8 @@ namespace sot_controller
   
   bool RCSotController::
   initInterfaces(lhi::RobotHW * robot_hw,
-		 ros::NodeHandle &,
-		 ros::NodeHandle &,
+		 ros::NodeHandle & root_nh,
+		 ros::NodeHandle & controller_nh,
 		 ClaimedResources & claimed_resources)
   {
     std::string lns;
@@ -231,6 +237,9 @@ namespace sot_controller
     vel_iface_->clearClaims();
     effort_iface_->clearClaims();
     
+    if (!initNonHolonomicBaseController(robot_hw, root_nh, controller_nh, claimed_resources)) {
+      return false;
+    }
     if (! init ())
       {
 	ROS_ERROR("Failed to initialize sot-controller" );
@@ -578,7 +587,10 @@ namespace sot_controller
     // Init Joint Names.
     joints_.resize(joints_name_.size());
     
-    for (unsigned int i=0;i<nbDofs_;i++)
+    // Joseph Mirabel: I do not remember why I
+    // had to change nbDofs_ into joints_.size()
+    // but I remember it caused some problems.
+    for (unsigned int i=0;i<joints_.size();i++)
       {
 	bool notok=true;
 	SotControlMode lcontrol_mode = control_mode_;
@@ -671,6 +683,34 @@ namespace sot_controller
     return true;
   }
   
+  bool RCSotController::
+  initNonHolonomicBaseController(lhi::RobotHW * robot_hw,
+                                 ros::NodeHandle& root_nh,
+                                 ros::NodeHandle &,
+                                 ClaimedResources & claimed_resources)
+  {
+    /// Check if the base controller should be initialized.
+    if (root_nh.hasParam("/sot_controller/base_controller"))
+      {
+        std::string param;
+        if (root_nh.getParam("/sot_controller/base_controller", param))
+          {
+            nonholonomic_base_controller_ = new diff_drive_controller::DiffDriveController ();
+            ros::NodeHandle controller_nh (param);
+            nonholonomic_base_controller_->init (vel_iface_, root_nh, controller_nh);
+            ((controller_interface::ControllerBase*)nonholonomic_base_controller_)->initRequest (robot_hw, root_nh, controller_nh, claimed_resources);
+          }
+        else
+          {
+	    ROS_ERROR_STREAM("Could not read param /sot_controller/base_controller");
+            return false;
+          }
+      }
+    else
+      nonholonomic_base_controller_ = NULL;
+    return true;
+  }
+
   void RCSotController::
   fillSensorsIn(std::string &title, std::vector<double> & data)
   {
@@ -715,6 +755,21 @@ namespace sot_controller
     ltitle = "currents";
     fillSensorsIn(ltitle,DataOneIter_.motor_currents);
     
+  }
+
+  void RCSotController::
+  fillNonHolonomicBase(const ros::Time& time, const ros::Duration& period)
+  {
+    if (nonholonomic_base_controller_) {
+      nonholonomic_base_controller_->computeOdom(time, period);
+      const diff_drive_controller::Odometry& odom = nonholonomic_base_controller_->odometry();
+      DataOneIter_.odometry[0] = odom.getX();
+      DataOneIter_.odometry[1] = odom.getY();
+      DataOneIter_.odometry[2] = odom.getHeading();
+      // Set base position
+      std::string title ("odometry");
+      fillSensorsIn (title, DataOneIter_.odometry);
+    }
   }
 
   void RCSotController::setSensorsImu(std::string &name,
@@ -810,16 +865,18 @@ namespace sot_controller
   }
 
   void RCSotController::
-  fillSensors()
+  fillSensors(const ros::Time& time, const ros::Duration& period)
   {
     fillJoints();
+    fillNonHolonomicBase(time, period);
     fillImu();
     fillForceSensors();
     fillTempSensors();
   }
   
   void RCSotController::
-  readControl(std::map<std::string,dgs::ControlValues> &controlValues)
+  readControl(const ros::Time& time, const ros::Duration& period,
+      std::map<std::string,dgs::ControlValues> &controlValues)
   {
     ODEBUG4("joints_.size() = " << joints_.size());
 	    
@@ -829,27 +886,45 @@ namespace sot_controller
     else if (control_mode_==EFFORT)
       cmdTitle="cmd-effort";
 
+    if (nonholonomic_base_controller_)
+      {
+        it_map_rt_to_sot it_mapRC2Sot= mapFromRCToSotDevice_.find("cmd-base-vel");
+        if (it_mapRC2Sot!=mapFromRCToSotDevice_.end())
+          {
+            std::string lmapRC2Sot = it_mapRC2Sot->second;
+            const std::vector<double>& command = controlValues[lmapRC2Sot].getValues();
+            assert (command.size() == 2);
+            base_command_.linear .x = command[0];
+            base_command_.angular.z = command[1];
+            nonholonomic_base_controller_->cmdVelCallback(base_command_);
+            nonholonomic_base_controller_->computeCommand (time, period);
+          }
+      }
+
     it_map_rt_to_sot it_mapRC2Sot= mapFromRCToSotDevice_.find(cmdTitle);
     if (it_mapRC2Sot!=mapFromRCToSotDevice_.end())
       {
 	std::string lmapRC2Sot = it_mapRC2Sot->second;
 	command_ = controlValues[lmapRC2Sot].getValues();
 	ODEBUG4("angleControl_.size() = " << command_.size());
+  // Joseph Mirabel: Same as above. I don't remember
+  // why it's important.
 	for(unsigned int i=0;
-	    i<command_.size();++i)
+	    // i<command_.size();++i)
+	    i<joints_.size();++i)
 	  {
 	    joints_[i].setCommand(command_[i]);
 	  }
       }
   }
 
-  void RCSotController::one_iteration()
+  void RCSotController::one_iteration(const ros::Time& time, const ros::Duration& period)
   {
     // Chrono start
     RcSotLog.start_it();
     
     /// Update the sensors.
-    fillSensors();
+    fillSensors(time, period);
 
     /// Generate a control law.
     try
@@ -860,7 +935,7 @@ namespace sot_controller
     catch(std::exception &e) { throw e;}
 
     /// Read the control values
-    readControl(controlValues_);
+    readControl(time, period, controlValues_);
     
     // Chrono stop.
     RcSotLog.stop_it();
@@ -926,7 +1001,7 @@ namespace sot_controller
   }
   
   void RCSotController::
-  update(const ros::Time&, const ros::Duration& period)
+  update(const ros::Time& time, const ros::Duration& period)
    {
     // Do not send any control if the dynamic graph is not started
      if (!isDynamicGraphStopped())
@@ -936,7 +1011,7 @@ namespace sot_controller
 	   double periodInSec = period.toSec();
 	   if (periodInSec+accumulated_time_>dt_-jitter_)
 	     {
-	       one_iteration();
+	       one_iteration(time, period);
 	       accumulated_time_ = 0.0;
 	     }
 	   else
@@ -966,14 +1041,17 @@ namespace sot_controller
    }
   
   void RCSotController::
-  starting(const ros::Time &)
+  starting(const ros::Time& time)
   {
-    fillSensors();
+    ros::Duration unused;
+    fillSensors(time, unused);
+    if (nonholonomic_base_controller_) nonholonomic_base_controller_->startRequest (time);
   }
     
   void RCSotController::
-  stopping(const ros::Time &)
+  stopping(const ros::Time & time)
   {
+    if (nonholonomic_base_controller_) nonholonomic_base_controller_->stopRequest (time);
     std::string afilename("/tmp/sot.log");
     RcSotLog.save(afilename);
   }

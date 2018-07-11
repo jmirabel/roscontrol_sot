@@ -35,11 +35,13 @@
 #include <string>
 #include <map>
 
+#include <geometry_msgs/Twist.h>
 #include <controller_interface/controller.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/imu_sensor_interface.h>
 #include <hardware_interface/force_torque_sensor_interface.h>
 #include <pal_hardware_interfaces/actuator_temperature_interface.h>
+#include <diff_drive_controller/diff_drive_controller.h>
 
 #include <dynamic_graph_bridge/sot_loader_basic.hh>
 #include <ros/ros.h>
@@ -101,6 +103,10 @@ namespace sot_controller
     /// \brief Vector of joint handles.
     std::vector<lhi::JointHandle> joints_;
     std::vector<std::string> joints_name_;
+
+    /// \brief Controller of the wheels
+    diff_drive_controller::DiffDriveController* nonholonomic_base_controller_;
+    geometry_msgs::Twist base_command_;
 
     /// \brief Vector towards the IMU.
     std::vector<lhi::ImuSensorHandle> imu_sensor_;
@@ -172,6 +178,7 @@ namespace sot_controller
   public :
 
     RCSotController ();
+    ~RCSotController ();
 
     /// \brief Read the configuration files, 
     /// claims the request to the robot and initialize the Stack-Of-Tasks.
@@ -188,11 +195,11 @@ namespace sot_controller
 
     /// \brief Read the sensor values, calls the control graph, and apply the control.
     /// 
-    void update(const ros::Time&, const ros::Duration& );
+    void update(const ros::Time& time, const ros::Duration& period);
     /// \brief Starting by filling the sensors.
-    void starting(const ros::Time&);
+    void starting(const ros::Time& time);
     /// \brief Stopping the control
-    void stopping(const ros::Time&);
+    void stopping(const ros::Time& time);
     /// \brief Display the kind of hardware interface that this controller is using.
     virtual std::string getHardwareInterfaceType() const;
 
@@ -211,6 +218,12 @@ namespace sot_controller
     bool initForceSensors();
     /// Initialize the hardware interface accessing the temperature sensors.
     bool initTemperatureSensors();
+    /// Initialize the controller of the base
+    bool initNonHolonomicBaseController(
+        lhi::RobotHW * robot_hw,
+        ros::NodeHandle& root_nh,
+        ros::NodeHandle &,
+        ClaimedResources & claimed_resources);
 
     ///@{ \name Read the parameter server
     /// \brief Entry point
@@ -245,6 +258,9 @@ namespace sot_controller
 
     /// \brief Get the information from the low level and calls fillSensorsIn.
     void fillJoints();
+
+    /// \brief Get the odometry of the non holonomic base.
+    void fillNonHolonomicBase(const ros::Time& time, const ros::Duration& period);
     
     /// In the map sensorsIn_ creates the key "name_IMUNb"
     /// and associate to this key the vector data.
@@ -260,7 +276,7 @@ namespace sot_controller
     /// Read the temperature sensors
     void fillTempSensors();
     /// Entry point for reading all the sensors .
-    void fillSensors();
+    void fillSensors(const ros::Time& time, const ros::Duration& period);
     ///@}
     
     ///@{ Control the robot while waiting for the SoT
@@ -271,7 +287,8 @@ namespace sot_controller
     
     ///@}
     /// Extract control values to send to the simulator.
-    void readControl(std::map<std::string,dgs::ControlValues> &controlValues);
+    void readControl(const ros::Time& time, const ros::Duration& period,
+        std::map<std::string,dgs::ControlValues> &controlValues);
 
     /// Map of sensor readings
     std::map <std::string,dgs::SensorValues> sensorsIn_;
@@ -288,7 +305,7 @@ namespace sot_controller
     std::vector<double> command_;
     
     /// One iteration: read sensor, compute the control law, apply control.
-    void one_iteration();
+    void one_iteration(const ros::Time& time, const ros::Duration& period);
 
   };
 }
