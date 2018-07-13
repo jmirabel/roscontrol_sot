@@ -690,10 +690,10 @@ namespace sot_controller
                                  ClaimedResources & claimed_resources)
   {
     /// Check if the base controller should be initialized.
-    if (root_nh.hasParam("/sot_controller/base_controller"))
+    if (root_nh.hasParam("/sot_controller/mobile_base_controller"))
       {
         std::string param;
-        if (root_nh.getParam("/sot_controller/base_controller", param))
+        if (root_nh.getParam("/sot_controller/mobile_base_controller", param))
           {
             nonholonomic_base_controller_ = new diff_drive_controller::DiffDriveController ();
             ros::NodeHandle controller_nh (param);
@@ -702,7 +702,7 @@ namespace sot_controller
           }
         else
           {
-	    ROS_ERROR_STREAM("Could not read param /sot_controller/base_controller");
+	    ROS_ERROR_STREAM("Could not read param /sot_controller/mobile_base_controller");
             return false;
           }
       }
