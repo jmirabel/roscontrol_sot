@@ -159,34 +159,54 @@ void Log::save(std::string &fileName)
 
 }
 
+void writeToBuffer (ofstream& of, char* buffer,
+    const unsigned int& bufferSize, unsigned int& cursor,
+    const double& d)
+{
+  if (bufferSize < cursor + 512) {
+    of.write (buffer, cursor);
+    cursor = 0;
+  }
+  const char dblFmt[] = "%14.12e ";
+  cursor += sprintf (&buffer[cursor], dblFmt, d);
+}
+
 void Log::saveVector(std::string &fileName,std::string &suffix,
-		     std::vector<double> &avector,
+		     const std::vector<double> &avector,
 		     unsigned int size)
 {
   ostringstream oss;
   oss << fileName;
   oss << suffix.c_str();
   std::string actualFileName= oss.str();
+
   ofstream aof(actualFileName.c_str());
-  aof << std::setprecision(12) << std::setw(12) << std::setfill('0');
+
+  // Increase speed to write to hard disk.
+  // See https://stackoverflow.com/q/12997131
+  const unsigned int length = 1 << 19; // 512 kB
+  char buffer[length];
+
+  unsigned int cursor=0;
   if (aof.is_open())
     {
       for(unsigned long int i=0;i<length_;i++)
 	{
 	  // Save timestamp
-	  aof << StoredData_.timestamp[i] << " " ;
+          writeToBuffer (aof, buffer, length, cursor, StoredData_.timestamp[i]);
 
 	  // Compute and save dt
 	  if (i==0)
-	    aof << StoredData_.timestamp[i] - StoredData_.timestamp[length_-1] << " ";
+            writeToBuffer (aof, buffer, length, cursor, StoredData_.timestamp[i] - StoredData_.timestamp[length_-1]);
 	  else
-	    aof << StoredData_.timestamp[i] - StoredData_.timestamp[i-1] << " ";
+            writeToBuffer (aof, buffer, length, cursor, StoredData_.timestamp[i] - StoredData_.timestamp[i-1]);
 
 	  // Save all data
 	  for(unsigned long int datumID=0;datumID<size;datumID++)
-	    aof << avector[i*size+datumID] << " " ;
+            writeToBuffer (aof, buffer, length, cursor, avector[i*size+datumID]);
 
-	  aof << std::endl;
+          buffer[cursor] = '\n';
+          ++cursor;
 	}
       aof.close();
     }
