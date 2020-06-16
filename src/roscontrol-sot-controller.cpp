@@ -812,14 +812,14 @@ void RCSotController::fillJoints() {
       JointSotHandle &aJoint = anItJoint->second;
       DataOneIter_.motor_angle[idJoint] = aJoint.joint.getPosition();
 
-#ifdef TEMPERATURE_SENSOR_CONTROLLER
+//#ifdef TEMPERATURE_SENSOR_CONTROLLER
       DataOneIter_.joint_angle[idJoint] = aJoint.joint.getAbsolutePosition();
-#endif
+//#endif
       DataOneIter_.velocities[idJoint] = aJoint.joint.getVelocity();
 
-#ifdef TEMPERATURE_SENSOR_CONTROLLER
+//#ifdef TEMPERATURE_SENSOR_CONTROLLER
       DataOneIter_.torques[idJoint] = aJoint.joint.getTorqueSensor();
-#endif
+//#endif
       DataOneIter_.motor_currents[idJoint] = aJoint.joint.getEffort();
     }
   }

@@ -33,7 +33,6 @@ add_required_dependency(bullet)
 add_required_dependency(urdfdom)
 
 SET(CATKIN_REQUIRED_COMPONENTS
-  temperature_sensor_controller
   pal_hardware_interfaces
   controller_interface
   controller_manager
@@ -47,6 +46,7 @@ SET(CATKIN_REQUIRED_COMPONENTS
   )
 
 find_package(catkin REQUIRED COMPONENTS ${CATKIN_REQUIRED_COMPONENTS})
+find_package(temperature_sensor_controller)
 
 ADD_PROJECT_DEPENDENCY(dynamic-graph-python REQUIRED)
 ADD_PROJECT_DEPENDENCY(dynamic_graph_bridge REQUIRED)
